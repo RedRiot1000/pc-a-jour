@@ -25,6 +25,15 @@ namespace PCaJour
             int json = a.IndexOf("--scan-json");
             if (json >= 0) { ScanToJson(a[json + 1]); return; }
 
+            // --page-test fichier fabricant modèle fabricantCarte carte portable(0/1) : teste le lien BIOS
+            int page = a.IndexOf("--page-test");
+            if (page >= 0)
+            {
+                var h = new Hardware { SystemMaker = a[page + 2], SystemModel = a[page + 3], BoardMaker = a[page + 4], Board = a[page + 5], Laptop = a[page + 6] == "1" };
+                File.AppendAllText(a[page + 1], h.Name + " | " + h.SupportPage + "\n");
+                return;
+            }
+
             // --update-test fichier : lance la mise à jour sans fenêtre (test)
             int upd = a.IndexOf("--update-test");
             if (upd >= 0)

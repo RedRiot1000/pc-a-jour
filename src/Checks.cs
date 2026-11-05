@@ -12,9 +12,47 @@ namespace PCaJour
 {
     public class Hardware
     {
-        public string BoardMaker, Board, BiosVersion, Cpu, Summary;
+        public string BoardMaker, Board, BiosVersion, Cpu, Summary, SystemMaker = "", SystemModel = "";
         public DateTime BiosDate;
+        public bool Laptop;
         public List<string> Gpus = new List<string>();
+
+        static bool Placeholder(string s)
+        {
+            return s == "" || Regex.IsMatch(s, @"To Be Filled|System manufacturer|System Product|Default string|O\.?E\.?M|Not Specified|Not Applicable", RegexOptions.IgnoreCase);
+        }
+
+        /// Portable ou PC de marque : son BIOS se cherche par modèle de PC, pas par carte mère.
+        public bool Branded
+        {
+            get
+            {
+                if (Placeholder(SystemModel)) return false;
+                // Sur un PC monté, le « fabricant » du système est celui de la carte mère
+                return Laptop || (!Placeholder(SystemMaker) && !Regex.IsMatch(SystemMaker, "Micro-Star|ASUS|Gigabyte|ASRock|Biostar", RegexOptions.IgnoreCase));
+            }
+        }
+
+        public string BoardShortName { get { return Regex.Replace(Board, @"\s*\(.*\)", "").Trim(); } }
+        public string Name
+        {
+            get
+            {
+                if (!Branded) return BoardShortName;
+                string maker = SystemMaker.Contains("Micro-Star") ? "MSI" : SystemMaker;
+                return SystemModel.StartsWith(maker, StringComparison.OrdinalIgnoreCase) ? SystemModel : maker + " " + SystemModel;
+            }
+        }
+
+        public string SupportPage
+        {
+            get
+            {
+                if (!Branded && BoardMaker.Contains("Micro-Star") && !BoardShortName.StartsWith("MS-"))
+                    return "https://www.msi.com/Motherboard/" + BoardShortName.Replace(' ', '-') + "/support";
+                return "https://www.google.com/search?q=" + Uri.EscapeDataString(Name + " support BIOS drivers");
+            }
+        }
     }
 
     public static class Checks
@@ -38,7 +76,6 @@ namespace PCaJour
         {
             try { return Util.HttpGet(url); } catch { return ""; }
         }
-        static string BoardName(string board) { return Regex.Replace(board, @"\s*\(.*\)", "").Trim(); }
 
         static string UninstallVersion(string exactName)
         {
@@ -59,6 +96,11 @@ namespace PCaJour
             var h = new Hardware();
             var bb = Wmi("SELECT Manufacturer,Product FROM Win32_BaseBoard").First();
             h.BoardMaker = S(bb, "Manufacturer"); h.Board = S(bb, "Product");
+            var sys = Wmi("SELECT Manufacturer,Model FROM Win32_ComputerSystem").FirstOrDefault();
+            if (sys != null) { h.SystemMaker = S(sys, "Manufacturer"); h.SystemModel = S(sys, "Model"); }
+            var box = Wmi("SELECT ChassisTypes FROM Win32_SystemEnclosure").FirstOrDefault();
+            var chassis = box == null ? null : box["ChassisTypes"] as ushort[];
+            h.Laptop = chassis != null && chassis.Any(c => new ushort[] { 8, 9, 10, 11, 12, 14, 18, 21, 30, 31, 32 }.Contains(c));
             var bios = Wmi("SELECT SMBIOSBIOSVersion,ReleaseDate FROM Win32_BIOS").First();
             h.BiosVersion = S(bios, "SMBIOSBIOSVersion");
             h.BiosDate = ManagementDateTimeConverter.ToDateTime(S(bios, "ReleaseDate"));
@@ -67,7 +109,7 @@ namespace PCaJour
             var main = h.Gpus.FirstOrDefault(n => n.Contains("NVIDIA")) ?? h.Gpus.FirstOrDefault() ?? "";
             long ram = Wmi("SELECT Capacity FROM Win32_PhysicalMemory").Sum(o => Convert.ToInt64(o["Capacity"]));
             string cpu = Regex.Replace(h.Cpu.Replace("AMD ", ""), @"\s+\d+-Core Processor", "").Trim();
-            h.Summary = BoardName(h.Board) + "  ·  " + cpu + "  ·  " + main.Replace("NVIDIA GeForce ", "") + "  ·  " + (ram >> 30) + " Go";
+            h.Summary = h.Name + "  ·  " + cpu + "  ·  " + main.Replace("NVIDIA GeForce ", "") + "  ·  " + (ram >> 30) + " Go";
             return h;
         }
 
@@ -233,8 +275,8 @@ namespace PCaJour
 
                 if (cls == "NET" && maker.Contains("Realtek") && name.Contains("2.5G")) { res.Add(RealtekLan(name, ver, date)); continue; }
                 if (date.Year > 2010 && date < DateTime.Now.AddYears(-3))
-                    res.Add(new Item(Sections.Drivers, name, St.Check, "Pilote du " + date.ToString("dd/MM/yyyy") + " (" + Util.Months(date) + "). Regarde si le site de ta carte mère en a un plus récent.")
-                        .Versions(ver, null).Link("Pilotes carte mère", BoardPage(h)));
+                    res.Add(new Item(Sections.Drivers, name, St.Check, "Pilote du " + date.ToString("dd/MM/yyyy") + " (" + Util.Months(date) + "). Regarde si le site " + (h.Branded ? "du fabricant" : "de ta carte mère") + " en a un plus récent.")
+                        .Versions(ver, null).Link(h.Branded ? "Pilotes du PC" : "Pilotes carte mère", h.SupportPage));
             }
             var bad = Wmi("SELECT Name,ConfigManagerErrorCode FROM Win32_PnPEntity WHERE ConfigManagerErrorCode <> 0 AND ConfigManagerErrorCode <> 22").Select(o => S(o, "Name")).ToList();
             if (bad.Count > 0)
@@ -263,13 +305,6 @@ namespace PCaJour
         }
 
         // ---------- BIOS / composants ----------
-        static string BoardPage(Hardware h)
-        {
-            if (h.BoardMaker.Contains("Micro-Star"))
-                return "https://www.msi.com/Motherboard/" + BoardName(h.Board).Replace(' ', '-') + "/support";
-            return "https://www.google.com/search?q=" + Uri.EscapeDataString(h.BoardMaker + " " + h.Board + " support BIOS");
-        }
-
         const string BiosHelp =
             "Le BIOS se met à jour à la main : un flash raté peut empêcher le PC de démarrer, donc PC à Jour ne le fait pas à ta place.\n\n" +
             "1. Sur la page du constructeur, télécharge la version la plus récente qui n'est pas marquée « Beta ».\n" +
@@ -284,11 +319,11 @@ namespace PCaJour
         {
             var res = new List<Item>();
             string code = Regex.Match(h.Board, @"MS-(\w+)").Groups[1].Value;
-            string siteName = code != "" && h.BoardMaker.Contains("Micro-Star") ? " Sur le site, ta version s'écrit " + code + "v" + h.BiosVersion.Replace(".", "") + "." : "";
+            string siteName = code != "" && !h.Branded && h.BoardMaker.Contains("Micro-Star") ? " Sur le site, ta version s'écrit " + code + "v" + h.BiosVersion.Replace(".", "") + "." : "";
             bool old = h.BiosDate < DateTime.Now.AddMonths(-3);
-            res.Add(new Item(Sections.Firmware, "BIOS " + BoardName(h.Board), old ? St.Check : St.Info,
+            res.Add(new Item(Sections.Firmware, "BIOS " + h.Name, old ? St.Check : St.Info,
                     "Daté du " + h.BiosDate.ToString("dd/MM/yyyy") + " (" + Util.Months(h.BiosDate) + ")." + siteName + " Compare avec la page du constructeur : PC à Jour ne peut pas le vérifier tout seul.")
-                .Versions(h.BiosVersion, null).Link("Page BIOS", BoardPage(h)).WithHelp(BiosHelp));
+                .Versions(h.BiosVersion, null).Link(h.SupportPage.Contains("google.com") ? "Chercher le BIOS" : "Page BIOS", h.SupportPage).WithHelp(BiosHelp));
 
             res.Add(new Item(Sections.Firmware, h.Cpu.Trim(), St.Info, "Un processeur n'a pas de pilote à lui : ses correctifs passent par le BIOS et le pilote chipset."));
 
