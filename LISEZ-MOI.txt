@@ -1,0 +1,36 @@
+PC À JOUR — vérifie que ton PC est à jour et bien réglé
+=======================================================
+
+PC à Jour contrôle Windows, tes pilotes, tes applications, ton BIOS, tes disques
+et les réglages qui jouent sur les performances. Rien n'est installé sans ton clic.
+
+INSTALLATION
+  Rien à installer. Mets PCaJour.exe où tu veux (par exemple dans Documents),
+  puis double-clique dessus. Évite Program Files, sinon l'appli ne pourra pas
+  se mettre à jour toute seule.
+
+  Si Windows affiche « Windows a protégé votre ordinateur », clique sur
+  « Informations complémentaires » puis « Exécuter quand même » : l'appli n'est
+  pas signée, c'est normal pour un programme maison.
+
+UTILISATION
+  1. L'analyse se lance à l'ouverture et dure environ 15 secondes.
+  2. Coche ce que tu veux mettre à jour, puis clique sur « Installer la sélection ».
+     Windows demande alors l'autorisation administrateur.
+  3. Pour le reste, les boutons ouvrent la bonne page ou le bon réglage.
+
+CE QUI SE FAIT À LA MAIN
+  - Le BIOS : un flash raté peut empêcher le PC de démarrer. Le bouton
+    « Comment faire » donne les étapes.
+  - Certains pilotes (chipset AMD, carte réseau Realtek) : l'appli te dit s'ils
+    sont en retard et ouvre la page officielle.
+
+BON À SAVOIR
+  - Les vérifications automatiques couvrent surtout NVIDIA, AMD et Realtek. Pour
+    une carte graphique Intel ou un chipset Intel, passe par Windows Update ou le
+    site du fabricant.
+  - Sauvegarde tes données importantes avant une grosse mise à jour.
+
+MISES À JOUR DE L'APPLI
+  L'appli se met à jour toute seule à chaque lancement. Un bouton « Relancer »
+  apparaît quand une nouvelle version est prête.

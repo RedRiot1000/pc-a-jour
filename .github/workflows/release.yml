@@ -1,0 +1,23 @@
+# À chaque tag v1.2.3 poussé : compile PCaJour.exe sur Windows et crée la release GitHub.
+# Les applis déjà installées la téléchargent au lancement suivant.
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compiler
+        shell: powershell
+        run: .\build.ps1
+      - name: Publier la release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: PC à Jour ${{ github.ref_name }}
+          files: |
+            dist/PCaJour.exe
+            PCaJour.zip
